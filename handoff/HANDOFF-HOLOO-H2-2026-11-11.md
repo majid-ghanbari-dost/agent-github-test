@@ -64,3 +64,26 @@ A verified preliminary findings note is committed at `reports/H2_PRELIMINARY_VER
 - SQL Server is restored inside a temporary GitHub Actions container and destroyed after the job. There is no persistent live DB session.
 - Artifact upload happens even when the extraction step fails. Check job conclusion and success marker files.
 - Do not claim exact meaning of EndBuy_PriceK, payment columns, or the 0101001 stock discrepancy without additional evidence.
+
+
+---
+
+## Status update — 2026-11-11 final checkpoint
+
+The original next-steps list above is superseded by the current handoff:
+`handoff/HANDOFF-HOLOO-H2-2026-11-11-CURRENT.md`.
+
+Final successful extraction:
+- Run ID: 42975548964 (run 17)
+- Commit: e4156c41ea176e50f58ae9e8b664092483b2ad16
+- Artifact ID: 13835013322
+- Artifact SHA-256: 75003c45e8bb687ed3eb9c3eb96f19a176ed3b8aa820fad346b8fe28c243ff51
+- Job conclusion: success; both extraction success markers present; isolated SQL Server destroyed after run.
+
+H2-1 through H2-5 have been executed and analyzed. H2-6 final Persian report, methodology, evidence index, 47 raw evidence files and SHA-256 manifest have been packaged in `HOLOO-H2-FINAL-2026-11-11.zip`.
+Package SHA-256: `b5a7544603ce8649f5ca3618d4889ffe6dbcd2359157c194ead2e2ccfc9c20b8`.
+
+Final report: `reports/H2_FINAL_REPORT_FA_2026-11-11.md`.
+Package digest: `reports/H2_FINAL_PACKAGE_SHA256.txt`.
+
+The remaining unknowns are the exact reason for sentinel stock values on service item 0101001, complete operational semantics of all payment fields, and definitive app-side semantics of EndBuy_PriceK. They are explicitly documented and are not misrepresented as resolved.
