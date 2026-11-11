@@ -131,6 +131,8 @@ jobs:
           docker cp holoo-sql:/tmp/modules_endbuy_price.txt reports/modules_endbuy_price.txt
           "${SQLCMD[@]}" -Q "SELECT COUNT(*) AS invoice_count,COUNT(x.Fac_Code) AS invoices_with_snd_indx,SUM(CASE WHEN f.Sanad_Code=x.Sanad_Code THEN 1 ELSE 0 END) AS same_sanad_code,SUM(CASE WHEN f.Sanad_Code<>x.Sanad_Code OR f.Sanad_Code IS NULL OR x.Sanad_Code IS NULL THEN 1 ELSE 0 END) AS sanad_code_mismatches FROM dbo.FACTURE f LEFT JOIN dbo.SND_INDX x ON x.Fac_Code=f.Fac_Code AND x.Fac_Type=f.Fac_Type; SELECT COUNT(*) AS duplicate_invoice_index_groups FROM (SELECT Fac_Code,Fac_Type,COUNT(*) AS n FROM dbo.SND_INDX GROUP BY Fac_Code,Fac_Type HAVING COUNT(*)>1) d;" -o /tmp/accounting_link_exactness.txt
           docker cp holoo-sql:/tmp/accounting_link_exactness.txt reports/accounting_link_exactness.txt
+          "${SQLCMD[@]}" -Q "SELECT Fac_Type,COUNT(*) AS line_count,SUM(CASE WHEN ABS(ISNULL(Price_BS,0)-ISNULL(Buy_Price,0))<0.01 THEN 1 ELSE 0 END) AS PriceBS_equals_BuyPrice,SUM(CASE WHEN ABS(ISNULL(Buy_Price,0)-ISNULL(EndBuy_PriceK,0))<0.01 THEN 1 ELSE 0 END) AS BuyPrice_equals_EndBuyPriceK,SUM(CASE WHEN ABS(ISNULL(Price_BS,0)-ISNULL(EndBuy_PriceK,0))<0.01 THEN 1 ELSE 0 END) AS PriceBS_equals_EndBuyPriceK,SUM(CASE WHEN EndBuy_PriceK IS NOT NULL AND EndBuy_PriceK<>0 AND Buy_Price IS NOT NULL AND Buy_Price<>0 THEN 1 ELSE 0 END) AS both_buy_fields_nonzero FROM dbo.FACTART GROUP BY Fac_Type ORDER BY Fac_Type;" -o /tmp/factart_price_direct_comparison.txt
+          docker cp holoo-sql:/tmp/factart_price_direct_comparison.txt reports/factart_price_direct_comparison.txt
           echo 'Core relational and business-logic extraction completed.' > reports/CORE_EXTRACTION_SUCCESS.txt
 
       - name: Upload restored database reports
