@@ -56,8 +56,10 @@ jobs:
           SQLCMD=(docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -b)
           "${SQLCMD[@]}" -Q "RESTORE VERIFYONLY FROM DISK=N'/var/opt/mssql/backup/holoo_backup.bak';"
           "${SQLCMD[@]}" -Q "RESTORE DATABASE [HolooAnalysis] FROM DISK=N'/var/opt/mssql/backup/holoo_backup.bak' WITH MOVE N'Holoo_Data' TO N'/var/opt/mssql/data/HolooAnalysis.mdf', MOVE N'Holoo_Log' TO N'/var/opt/mssql/data/HolooAnalysis_log.ldf', RECOVERY, STATS=5;"
-          "${SQLCMD[@]}" -Q "DBCC CHECKDB([HolooAnalysis]) WITH NO_INFOMSGS, ALL_ERRORMSGS;" -o reports/dbcc_checkdb.txt
-          "${SQLCMD[@]}" -W -s "|" -Q "SELECT name, compatibility_level, collation_name, state_desc, recovery_model_desc FROM sys.databases WHERE name=N'HolooAnalysis';" -o reports/database_info.txt
+          "${SQLCMD[@]}" -Q "DBCC CHECKDB([HolooAnalysis]) WITH NO_INFOMSGS, ALL_ERRORMSGS;" -o /tmp/dbcc_checkdb.txt
+          docker cp holoo-sql:/tmp/dbcc_checkdb.txt reports/dbcc_checkdb.txt
+          "${SQLCMD[@]}" -W -s "|" -Q "SELECT name, compatibility_level, collation_name, state_desc, recovery_model_desc FROM sys.databases WHERE name=N'HolooAnalysis';" -o /tmp/database_info.txt
+          docker cp holoo-sql:/tmp/database_info.txt reports/database_info.txt
 
       - name: Inventory database objects and row counts
         shell: bash
@@ -65,10 +67,14 @@ jobs:
           set -euo pipefail
           SA_PASSWORD="$(cat /tmp/sql_sa_password)"
           SQLCMD=(docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d HolooAnalysis -b -W -s "|")
-          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,t.name AS table_name,SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id LEFT JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY s.name,t.name;" -o reports/table_inventory.txt
-          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,o.name AS object_name,o.type_desc FROM sys.objects o JOIN sys.schemas s ON s.schema_id=o.schema_id WHERE o.type IN ('V','P','FN','IF','TF','TR') ORDER BY o.type_desc,s.name,o.name;" -o reports/programmable_objects.txt
-          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,t.name AS table_name,c.column_id,c.name AS column_name,ty.name AS data_type,c.max_length,c.precision,c.scale,c.is_nullable FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id ORDER BY s.name,t.name,c.column_id;" -o reports/column_inventory.txt
-          "${SQLCMD[@]}" -Q "SELECT COUNT(*) AS user_tables FROM sys.tables; SELECT COUNT(*) AS views FROM sys.views; SELECT COUNT(*) AS stored_procedures FROM sys.procedures;" -o reports/object_counts.txt
+          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,t.name AS table_name,SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id LEFT JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY s.name,t.name;" -o /tmp/table_inventory.txt
+          docker cp holoo-sql:/tmp/table_inventory.txt reports/table_inventory.txt
+          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,o.name AS object_name,o.type_desc FROM sys.objects o JOIN sys.schemas s ON s.schema_id=o.schema_id WHERE o.type IN ('V','P','FN','IF','TF','TR') ORDER BY o.type_desc,s.name,o.name;" -o /tmp/programmable_objects.txt
+          docker cp holoo-sql:/tmp/programmable_objects.txt reports/programmable_objects.txt
+          "${SQLCMD[@]}" -Q "SELECT s.name AS schema_name,t.name AS table_name,c.column_id,c.name AS column_name,ty.name AS data_type,c.max_length,c.precision,c.scale,c.is_nullable FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id ORDER BY s.name,t.name,c.column_id;" -o /tmp/column_inventory.txt
+          docker cp holoo-sql:/tmp/column_inventory.txt reports/column_inventory.txt
+          "${SQLCMD[@]}" -Q "SELECT COUNT(*) AS user_tables FROM sys.tables; SELECT COUNT(*) AS views FROM sys.views; SELECT COUNT(*) AS stored_procedures FROM sys.procedures;" -o /tmp/object_counts.txt
+          docker cp holoo-sql:/tmp/object_counts.txt reports/object_counts.txt
           echo 'Database restore and inventory completed.' > reports/RESTORE_SUCCESS.txt
 
       - name: Upload restored database reports
