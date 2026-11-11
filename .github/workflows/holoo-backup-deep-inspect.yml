@@ -1,0 +1,83 @@
+name: Holoo Backup Deep Inspection
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'AutoHoloo1_030223_11-08-27_S700963.Zip'
+      - '.github/workflows/holoo-backup-deep-inspect.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-inner-file:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract one archive member and inspect its signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'AutoHoloo1_030223_11-08-27_S700963.Zip'
+          $outDir = Join-Path $env:RUNNER_TEMP 'holoo-deep-inspection'
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+          try {
+            $entries = @($zip.Entries | Where-Object { -not [string]::IsNullOrEmpty($_.Name) })
+            if ($entries.Count -ne 1) { throw "Expected exactly one file entry; found $($entries.Count)." }
+            $entry = $entries[0]
+            $target = Join-Path $outDir 'inner_payload.bin'
+            $inputStream = $entry.Open()
+            $outputStream = [System.IO.File]::Create($target)
+            try { $inputStream.CopyTo($outputStream) }
+            finally { $outputStream.Dispose(); $inputStream.Dispose() }
+          }
+          finally { $zip.Dispose() }
+
+          $item = Get-Item -LiteralPath $target
+          $hash = Get-FileHash -LiteralPath $target -Algorithm SHA256
+          $bytes = [System.IO.File]::ReadAllBytes($target)
+          $head = [BitConverter]::ToString($bytes[0..([Math]::Min(127,$bytes.Length-1))])
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          $matches = [regex]::Matches($ascii, '[ -~]{8,}') | Select-Object -First 250 | ForEach-Object { $_.Value }
+          $report = [ordered]@{
+            FileNameInArchive = 'AutoHoloo1'
+            ExtractedBytes = $item.Length
+            SHA256 = $hash.Hash
+            First128BytesHex = $head
+            LeadingAsciiStrings = @($matches)
+            SignatureHints = @{
+              SQLite = ($head.StartsWith('53-51-4C-69-74-65'))
+              ZIP = ($head.StartsWith('50-4B-03-04'))
+              OLECompound = ($head.StartsWith('D0-CF-11-E0'))
+              PDF = ($head.StartsWith('25-50-44-46'))
+              Gzip = ($head.StartsWith('1F-8B'))
+            }
+            SafetyNote = 'Only extracted as inert bytes for signature inspection; no embedded content was executed.'
+          }
+          $report | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $outDir 'inner_file_report.json')
+          @(
+            "Extracted bytes: $($item.Length)"
+            "SHA256: $($hash.Hash)"
+            "First 128 bytes (hex): $head"
+            "Signature hints:"
+            ($report.SignatureHints | ConvertTo-Json)
+            ''
+            'Printable strings:'
+            $matches
+            ''
+            'No embedded executable or script was run.'
+          ) | Set-Content -Encoding UTF8 (Join-Path $outDir 'inner_file_report.txt')
+
+      - name: Upload deep inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: holoo-inner-file-inspection
+          path: ${{ runner.temp }}/holoo-deep-inspection/
+          if-no-files-found: error
+          retention-days: 14
