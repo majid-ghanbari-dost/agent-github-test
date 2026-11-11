@@ -60,10 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           SA_PASSWORD="$(cat /tmp/sql_sa_password)"
+          # The SQL Server image does not guarantee that its backup directory exists.
+          docker exec -u 0 holoo-sql mkdir -p /var/opt/mssql/backup
           docker cp /tmp/holoo_backup.bak holoo-sql:/var/opt/mssql/backup/holoo_backup.bak
-          docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -W -s "|" -Q "RESTORE HEADERONLY FROM DISK = N'/var/opt/mssql/backup/holoo_backup.bak';" -o /tmp/header.txt
+          docker exec -u 0 holoo-sql chown mssql:mssql /var/opt/mssql/backup/holoo_backup.bak
+          docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -b -W -s "|" -Q "RESTORE HEADERONLY FROM DISK = N'/var/opt/mssql/backup/holoo_backup.bak';" -o /tmp/header.txt
           docker cp holoo-sql:/tmp/header.txt reports/restore_header.txt
-          docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -W -s "|" -Q "RESTORE FILELISTONLY FROM DISK = N'/var/opt/mssql/backup/holoo_backup.bak';" -o /tmp/filelist.txt
+          docker exec holoo-sql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -b -W -s "|" -Q "RESTORE FILELISTONLY FROM DISK = N'/var/opt/mssql/backup/holoo_backup.bak';" -o /tmp/filelist.txt
           docker cp holoo-sql:/tmp/filelist.txt reports/restore_filelist.txt
           cat reports/restore_header.txt
           cat reports/restore_filelist.txt
