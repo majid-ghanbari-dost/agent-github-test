@@ -34,6 +34,8 @@ A second workflow authoring defect initially escaped the shell variable as `\${S
 ## Recent commits
 - de01c32ec83cf3d15cdd7a5ada828e226f02bbe4 — fixed date alias and added H2 extraction SQL queries.
 - df6eb2634a57ffad3c610c26b740ae6bcc37794f — corrected shell variable expansion.
+- 1532c4a2692251720beb71a4793b42eaabee08fe — added payment-field module/view/procedure reference extraction.
+- 4e0940601d58345fa4eed4a0a729c40aa8dfd593 — added preliminary verified findings note.
 Workflow: `.github/workflows/holoo-restore-inventory.yml`.
 A push to this workflow path should trigger a new Actions run. The connector available in the prior session could fetch jobs/artifacts/logs for a known run ID but did not expose a general list-workflow-runs or workflow_dispatch action. If run ID cannot be discovered, inspect GitHub Actions UI or use a supported GitHub Actions listing/dispatch capability; do not claim a run completed without evidence.
 
@@ -44,6 +46,9 @@ A push to this workflow path should trigger a new Actions run. The connector ava
 - H2-4 payment analysis: `H2_4_payment_field_analysis.txt`, `H2_4_payment_samples.txt`; quantify FNaghd, FCheck, FNesieh, Card, Takhfif and compare candidate component sum to Sum_Price. Do not assign field semantics until corroborated by stored procedure/view definitions and samples.
 - H2-5 monthly trends: `H2_5_monthly_invoice_stats.txt`; Gregorian monthly counts, amounts, quantities by Fac_Type. Keep sales and returns separate; optionally derive net sales as F minus Y with transparent definition.
 - H2-6 package: create Persian executive summary, methodology, evidence index, limitations, SQL/query source, run/artifact IDs, SHA-256 manifest, and a ZIP deliverable.
+
+## Preliminary report
+A verified preliminary findings note is committed at `reports/H2_PRELIMINARY_VERIFIED_FINDINGS.md`. It confirms H2-1 exact per-line rounding across 8,071 invoices and records the sole known stock mismatch without guessing its cause.
 
 ## Next execution steps
 1. Verify latest workflow YAML on main. Ensure every SQLCMD invocation uses `${SQLCMD[@]}` (without a literal backslash) and the EndBuy sample query uses `f.Fac_Date`.
