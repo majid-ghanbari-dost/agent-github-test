@@ -1,0 +1,92 @@
+name: Holoo Backup Diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'AutoHoloo1_030223_11-08-27_S700963.Zip'
+      - '.github/workflows/holoo-backup-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-backup:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inspect archive without executing its contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'AutoHoloo1_030223_11-08-27_S700963.Zip'
+          $outDir = Join-Path $env:RUNNER_TEMP 'holoo-diagnostics'
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw "Expected archive not found: $archive"
+          }
+
+          $file = Get-Item -LiteralPath $archive
+          $hash = Get-FileHash -LiteralPath $archive -Algorithm SHA256
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+          try {
+            $entries = @($zip.Entries | Where-Object { -not [string]::IsNullOrEmpty($_.Name) })
+            $totalUncompressed = [int64](($entries | Measure-Object -Property Length -Sum).Sum)
+            $entryCount = $entries.Count
+
+            $inventory = foreach ($entry in $entries) {
+              [pscustomobject]@{
+                Path = $entry.FullName
+                CompressedBytes = $entry.CompressedLength
+                UncompressedBytes = $entry.Length
+                Extension = [System.IO.Path]::GetExtension($entry.Name)
+              }
+            }
+
+            $inventory | Export-Csv -NoTypeInformation -Encoding UTF8 -Path (Join-Path $outDir 'archive_inventory.csv')
+
+            $summary = [ordered]@{
+              ArchiveName = $file.Name
+              ArchiveBytes = $file.Length
+              SHA256 = $hash.Hash
+              EntryCount = $entryCount
+              TotalUncompressedBytes = $totalUncompressed
+              Entries = @($inventory)
+              SafetyNote = 'Archive entries were listed only. No embedded executable or script was run.'
+            }
+
+            $summary | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $outDir 'archive_report.json')
+
+            $lines = @(
+              "Archive: $($file.Name)"
+              "Size bytes: $($file.Length)"
+              "SHA256: $($hash.Hash)"
+              "File entries: $entryCount"
+              "Total uncompressed bytes: $totalUncompressed"
+              ''
+              'Entry inventory:'
+            )
+            $lines += ($inventory | ForEach-Object { "{0} | compressed={1} | uncompressed={2}" -f $_.Path, $_.CompressedBytes, $_.UncompressedBytes })
+            $lines += ''
+            $lines += 'No archive contents were executed or extracted.'
+            $lines | Set-Content -Encoding UTF8 (Join-Path $outDir 'archive_report.txt')
+
+            Write-Host "Archive inspected successfully."
+            Write-Host "Entries: $entryCount; uncompressed bytes: $totalUncompressed"
+            $inventory | Format-Table -AutoSize
+          }
+          finally {
+            $zip.Dispose()
+          }
+
+      - name: Upload diagnostic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: holoo-backup-diagnostics
+          path: ${{ runner.temp }}/holoo-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
